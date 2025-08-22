@@ -11,19 +11,13 @@ from kivy.uix.button import Button
 from kivy.uix.image import Image
 from kivy.uix.progressbar import ProgressBar
 from kivy.uix.checkbox import CheckBox
-from kivy.uix.widget import Widget
 from kivy.graphics import Color, Rectangle, RoundedRectangle
 from kivy.clock import Clock
 from kivy.core.window import Window
 from kivy.properties import StringProperty, NumericProperty, BooleanProperty, ObjectProperty
 from kivy.uix.popup import Popup
-from kivy.uix.gridlayout import GridLayout
 from kivy.uix.anchorlayout import AnchorLayout
-from kivy.uix.stacklayout import StackLayout
-from kivy.uix.scrollview import ScrollView
 from kivy.metrics import dp
-
-from PIL import Image as PILImage
 from pymongo import MongoClient
 from dotenv import load_dotenv
 
