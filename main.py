@@ -1,12 +1,30 @@
-# main.py
-import tkinter as tk
-from tkinter import messagebox
-import time
-import sys
-import threading
-from PIL import Image, ImageTk
-from pymongo import MongoClient
 import os
+import time
+import threading
+from kivy.app import App
+from kivy.uix.screenmanager import ScreenManager, Screen, SlideTransition
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.floatlayout import FloatLayout
+from kivy.uix.label import Label
+from kivy.uix.textinput import TextInput
+from kivy.uix.button import Button
+from kivy.uix.image import Image
+from kivy.uix.progressbar import ProgressBar
+from kivy.uix.checkbox import CheckBox
+from kivy.uix.widget import Widget
+from kivy.graphics import Color, Rectangle, RoundedRectangle
+from kivy.clock import Clock
+from kivy.core.window import Window
+from kivy.properties import StringProperty, NumericProperty, BooleanProperty, ObjectProperty
+from kivy.uix.popup import Popup
+from kivy.uix.gridlayout import GridLayout
+from kivy.uix.anchorlayout import AnchorLayout
+from kivy.uix.stacklayout import StackLayout
+from kivy.uix.scrollview import ScrollView
+from kivy.metrics import dp
+
+from PIL import Image as PILImage
+from pymongo import MongoClient
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -38,177 +56,273 @@ def get_db_connection():
 # Global db connection
 db = get_db_connection()
 
-class Launcher:
-    def __init__(self):
-        self.title_font = ("Arial", 48, "bold")
-        self.normal_font = ("Arial", 18)
-        self.loading_font = ("Arial", 24)
-        self.small_font = ("Arial", 14)
+# Custom styled components
+class StyledLabel(Label):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.font_name = "Roboto" if os.name != 'nt' else "Arial"
+        self.color = (1, 1, 1, 1)  # White text
+        self.halign = 'left'
+        self.valign = 'middle'
+
+class StyledButton(Button):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.font_name = "Roboto" if os.name != 'nt' else "Arial"
+        self.background_color = (0, 0, 0, 0)  # Transparent background
+        self.color = (1, 1, 1, 1)  # White text
+        self.bold = True
+        self.size_hint_y = None
+        self.height = dp(50)
         
-        self.root = tk.Tk()
-        self.root.title("Beyond The Brush")
-        self.center_window()
-        self.root.geometry("1280x720")
-        self.root.resizable(False, False)
+        # Create rounded rectangle background
+        with self.canvas.before:
+            Color(0.145, 0.458, 0.988, 1)  # Blue color
+            self.rect = RoundedRectangle(size=self.size, pos=self.pos, radius=[10])
+            
+        self.bind(pos=self.update_rect, size=self.update_rect)
+    
+    def update_rect(self, *args):
+        self.rect.pos = self.pos
+        self.rect.size = self.size
+
+class StyledTextInput(TextInput):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.font_name = "Roboto" if os.name != 'nt' else "Arial"
+        self.font_size = '16sp'
+        self.size_hint_y = None
+        self.height = dp(40)
+        self.background_color = (0, 0, 0, 0)  # Fully transparent background
+        self.foreground_color = (1, 1, 1, 1)  # White text
+        self.cursor_color = (1, 1, 1, 1)  # White cursor
+        self.hint_text_color = (1, 1, 1, 0.7)  # Semi-transparent white hint text
+        self.multiline = False
+        self.padding = [dp(10), dp(10)]
         
+        # Create rounded rectangle background
+        with self.canvas.before:
+            Color(1, 1, 1, 0.2)  # Semi-transparent white
+            self.rect = RoundedRectangle(size=self.size, pos=self.pos, radius=[5])
+            
+        self.bind(pos=self.update_rect, size=self.update_rect)
+    
+    def update_rect(self, *args):
+        self.rect.pos = self.pos
+        self.rect.size = self.size
+
+class StyledCheckBox(CheckBox):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.size_hint = (None, None)
+        self.size = (dp(30), dp(30))
+        self.color = (0.145, 0.458, 0.988, 1)  # Blue color
+        self.background_color = (0, 0, 0, 0)  # Transparent background
+
+class LoadingScreen(Screen):
+    progress_value = NumericProperty(0)
+    
+    def __init__(self, **kwargs):
+        super(LoadingScreen, self).__init__(**kwargs)
+        self.layout = FloatLayout()
+        
+        with self.layout.canvas.before:
+            Color(0, 0, 0, 1)  
+            self.rect = Rectangle(size=Window.size, pos=self.layout.pos)
+        
+        # Logo
         try:
-            if sys.platform == "win32":
-                self.root.wm_iconbitmap("icon/app.ico")
-            else:
-                icon_img = tk.PhotoImage(file="icon/app.ico")
-                self.root.iconphoto(True, icon_img)
-        except Exception as e:
-            print(f"Could not set icon: {e}")
+            self.logo = Image(source='icon/logo.png', size_hint=(None, None), size=(200, 200),
+                             pos_hint={'center_x': 0.5, 'center_y': 0.7})
+            self.layout.add_widget(self.logo)
+        except:
+            self.logo_label = StyledLabel(text="Beyond The Brush", font_size='48sp', bold=True,
+                                   pos_hint={'center_x': 0.5, 'center_y': 0.7})
+            self.layout.add_widget(self.logo_label)
         
-        self.root.protocol("WM_DELETE_WINDOW", self.force_close)
-        self.center_window()
-        self.show_loading_screen()
-        self.root.mainloop()
-
-    def center_window(self):
-        screen_width = self.root.winfo_screenwidth()
-        screen_height = self.root.winfo_screenheight()
-        x = (screen_width - 1280) // 2
-        y = (screen_height - 720) // 2
-        self.root.geometry(f"1280x720+{x}+{y}")
-
-    def show_loading_screen(self):
-        for widget in self.root.winfo_children():
-            widget.destroy()
+        # Loading text
+        self.loading_label = StyledLabel(text="Loading...", font_size='24sp',
+                                  pos_hint={'center_x': 0.5, 'center_y': 0.4})
+        self.layout.add_widget(self.loading_label)
         
-        canvas = tk.Canvas(self.root, width=1280, height=720)
-        canvas.pack()
-        bg_color = "#000000"
-        canvas.create_rectangle(0, 0, 1280, 720, fill=bg_color, outline="")
+        # Progress bar
+        self.progress_bar = ProgressBar(max=100, value=0, size_hint=(0.6, None), height=30,
+                                       pos_hint={'center_x': 0.5, 'center_y': 0.3})
+        self.layout.add_widget(self.progress_bar)
         
-        try:
-            logo_img = Image.open("icon/logo.png")
-            logo_img = logo_img.resize((200, 200))
-            self.logo_photo = ImageTk.PhotoImage(logo_img)
-            canvas.create_image(610, 150, image=self.logo_photo)
-        except FileNotFoundError:
-            canvas.create_text(610, 150, text="Beyond The Brush",
-                             font=self.title_font, fill="white")
-
-        canvas.create_text(610, 360, text="Loading...",
-                         font=self.loading_font, fill="white")
-        progress = canvas.create_rectangle(410, 400, 410, 430, fill="#2575fc", outline="")
-
-        for i in range(1, 101):
-            try:
-                canvas.coords(progress, 410, 400, 410 + (i * 4), 430)
-                self.root.update()
-                time.sleep(0.03)
-            except tk.TclError:
-                return
-
-        self.show_entry_page()
-
-    def show_entry_page(self):
-        self.center_window()
-        for widget in self.root.winfo_children():
-            widget.destroy()
-        
-        bg_color = "#000000"
-        canvas = tk.Canvas(self.root, width=1280, height=720, bg=bg_color)
-        canvas.pack()
-
-        # Improved vertical spacing
-        logo_y = 120
-        title_y = 250
-        role_y = 320
-        form_start_y = 380
-        button_start_y = 500
-
-        # Center logo
-        try:
-            logo_img = Image.open("icon/logo.png")
-            logo_img = logo_img.resize((150, 150))
-            self.logo_photo = ImageTk.PhotoImage(logo_img)
-            canvas.create_image(1280//2, logo_y, image=self.logo_photo)
-        except FileNotFoundError:
-            pass
-        
-        # Title text
-        canvas.create_text(1280//2, title_y, text="Beyond The Brush",
-                         font=("Arial", 36,), fill="white")
-
-        # Role selection - centered
-        self.role_var = tk.StringVar(value="student")
-        role_frame = tk.Frame(self.root, bg=bg_color)
-        role_frame.place(relx=0.5, y=role_y, anchor='center', width=360, height=50)
-        
-        # Form container for better alignment
-        form_frame = tk.Frame(self.root, bg=bg_color)
-        form_frame.place(relx=0.5, y=form_start_y, anchor='n')
-
-        # Name field
-        name_frame = tk.Frame(form_frame, bg=bg_color)
-        name_frame.pack(pady=5)
-        
-        self.name_label = tk.Label(name_frame, text="Enter your name:", font=self.small_font, 
-                                 bg=bg_color, fg="white", width=15, anchor='e')
-        self.name_label.pack(side=tk.LEFT, padx=5)
-        
-        self.name_entry = tk.Entry(name_frame, font=self.small_font, width=25)
-        self.name_entry.pack(side=tk.LEFT, padx=5)
-
-        # Code field
-        code_frame = tk.Frame(form_frame, bg=bg_color)
-        code_frame.pack(pady=5)
-        
-        self.code_label = tk.Label(code_frame, text="Access code:", font=self.small_font, 
-                                 bg=bg_color, fg="white", width=15, anchor='e')
-        self.code_label.pack(side=tk.LEFT, padx=5)
-        
-        self.code_entry = tk.Entry(code_frame, font=self.small_font, width=25, show="*")
-        self.code_entry.pack(side=tk.LEFT, padx=5)
-
-        # Button container for consistent spacing
-        button_frame = tk.Frame(self.root, bg=bg_color)
-        button_frame.place(relx=0.5, y=button_start_y, anchor='n')
-
-        # Buttons
-        login_btn = tk.Button(button_frame, text="Enter", font=self.normal_font,
-                             command=self.verify_and_launch, bg="#2575fc", fg="white",
-                             activebackground="#2575fc", activeforeground="white",
-                             width=15)
-        login_btn.pack(pady=10)
-        
-        exit_btn = tk.Button(button_frame, text="Exit", font=self.normal_font,
-                             command=self.force_close, bg="#ff00ff", fg="white",
-                             activebackground="#ff00ff", activeforeground="white",
-                             width=15)
-        exit_btn.pack(pady=10)
-
-        # Radio buttons
-        tk.Radiobutton(role_frame, text="Student", variable=self.role_var, value="student", 
-                      font=("Arial", 14, ), bg=bg_color, fg="white", selectcolor="#2575fc",
-                      activebackground=bg_color, activeforeground="white").pack(side=tk.LEFT, padx=20)
-        tk.Radiobutton(role_frame, text="Educator", variable=self.role_var, value="educator", 
-                      font=("Arial", 14, ), bg=bg_color, fg="white", selectcolor="#2575fc",
-                      activebackground=bg_color, activeforeground="white").pack(side=tk.LEFT, padx=20)
-
-        self.root.bind('<Return>', lambda event: self.verify_and_launch())
-        self.role_var.trace('w', self.on_role_change)
-        self.on_role_change()
-
-    def on_role_change(self, *args):
-        if self.role_var.get() == "student":
-            self.name_label.config(text="Enter your name:")
-            self.name_entry.config(state="normal")
-            self.name_entry.config(bg="white")
+        self.add_widget(self.layout)
+        self.bind(progress_value=self.update_progress)
+    
+    def update_progress(self, instance, value):
+        self.progress_bar.value = value
+    
+    def on_enter(self):
+        # Start loading process
+        Clock.schedule_interval(self.increment_progress, 0.03)
+    
+    def increment_progress(self, dt):
+        if self.progress_value < 100:
+            self.progress_value += 1
         else:
-            self.name_label.config(text="Educator Name:")
-            self.name_entry.config(state="normal")
-            self.name_entry.config(bg="white")
+            Clock.unschedule(self.increment_progress)
+            # Transition to entry screen after loading completes
+            Clock.schedule_once(lambda dt: setattr(self.manager, 'current', 'entry'), 0.5)
+            return False
+    
+    def on_size(self, *args):
+        self.rect.size = self.size
+        self.rect.pos = self.pos
 
+class EntryScreen(Screen):
+    role = StringProperty('student')
+    
+    def __init__(self, **kwargs):
+        super(EntryScreen, self).__init__(**kwargs)
+        self.layout = FloatLayout()
+        
+        with self.layout.canvas.before:
+            Color(0.219, 0.196, 0.196, 1)  # #383232
+            self.rect = Rectangle(size=Window.size, pos=self.layout.pos)
+        
+        # Logo
+        try:
+            self.logo = Image(source='icon/logo.png', size_hint=(None, None), size=(150, 150),
+                             pos_hint={'center_x': 0.5, 'center_y': 0.8})
+            self.layout.add_widget(self.logo)
+        except:
+            self.logo_label = StyledLabel(text="Beyond The Brush", font_size='36sp', bold=True,
+                                   pos_hint={'center_x': 0.5, 'center_y': 0.8})
+            self.layout.add_widget(self.logo_label)
+            
+        
+        # Title
+        self.title_label = StyledLabel(text="Beyond The Brush", font_size='36sp', bold=True,
+                                pos_hint={'center_x': 0.5, 'center_y': 0.65})
+        self.layout.add_widget(self.title_label)
+        
+        # Role selection - centered container
+        role_container = AnchorLayout(size_hint=(1, None), height=50, 
+                                    pos_hint={'center_x': 0.5, 'center_y': 0.55})
+        
+        role_layout = BoxLayout(orientation='horizontal', size_hint=(None, None), 
+                               size=(300, 50), spacing=20)
+        
+        # Student option
+        student_option = BoxLayout(orientation='horizontal', size_hint_x=None, width=150)
+        student_rb = StyledCheckBox(group='role', active=True)
+        student_rb.role_value = 'student'  # Add custom attribute
+        student_label = StyledLabel(text='Student', font_size='18sp', bold=True)
+        student_option.add_widget(student_rb)
+        student_option.add_widget(student_label)
+        
+        # Educator option
+        educator_option = BoxLayout(orientation='horizontal', size_hint_x=None, width=150)
+        educator_rb = StyledCheckBox(group='role')
+        educator_rb.role_value = 'educator'  # Add custom attribute
+        educator_label = StyledLabel(text='Educator', font_size='18sp', bold=True)
+        educator_option.add_widget(educator_rb)
+        educator_option.add_widget(educator_label)
+        
+        role_layout.add_widget(student_option)
+        role_layout.add_widget(educator_option)
+        
+        role_container.add_widget(role_layout)
+        self.layout.add_widget(role_container)
+        
+        # Bind radio buttons to role property
+        student_rb.bind(active=self.on_role_change)
+        educator_rb.bind(active=self.on_role_change)
+        
+        # Form container
+        form_layout = BoxLayout(orientation='vertical', size_hint=(0.6, 0.2),
+                               pos_hint={'center_x': 0.5, 'center_y': 0.4}, spacing=10)
+        
+        # Name field
+        name_layout = BoxLayout(orientation='horizontal', size_hint_y=None, height=40)
+        self.name_label = StyledLabel(text="Enter your name:", font_size='16sp', size_hint_x=0.4)
+        self.name_input = StyledTextInput(hint_text="Your name", size_hint_x=0.6)
+        name_layout.add_widget(self.name_label)
+        name_layout.add_widget(self.name_input)
+        form_layout.add_widget(name_layout)
+        
+        # Code field
+        code_layout = BoxLayout(orientation='horizontal', size_hint_y=None, height=40)
+        code_label = StyledLabel(text="Access code:", font_size='16sp', size_hint_x=0.4)
+        self.code_input = StyledTextInput(hint_text="Access code", password=True, size_hint_x=0.6)
+        code_layout.add_widget(code_label)
+        code_layout.add_widget(self.code_input)
+        form_layout.add_widget(code_layout)
+        
+        self.layout.add_widget(form_layout)
+        
+        # Buttons
+        button_layout = BoxLayout(orientation='vertical', size_hint=(0.6, 0.2),
+                                 pos_hint={'center_x': 0.5, 'center_y': 0.2}, spacing=10)
+        
+        self.enter_btn = StyledButton(text="Enter", font_size='18sp')
+        self.enter_btn.bind(on_press=self.verify_and_launch)
+        button_layout.add_widget(self.enter_btn)
+        
+        self.exit_btn = StyledButton(text="Exit", font_size='18sp')
+        with self.exit_btn.canvas.before:
+            Color(1, 0, 1, 1)  # Magenta color for exit button
+            self.exit_btn.rect = RoundedRectangle(size=self.exit_btn.size, pos=self.exit_btn.pos, radius=[10])
+        self.exit_btn.bind(on_press=self.force_close)
+        button_layout.add_widget(self.exit_btn)
+        
+        self.layout.add_widget(button_layout)
+        
+        self.add_widget(self.layout)
+    
+    def on_role_change(self, instance, value):
+        if value:  # This means the checkbox was checked
+            self.role = instance.role_value  # Use the custom attribute we added
+            if self.role == 'student':
+                self.name_label.text = "Enter your name:"
+                self.name_input.disabled = False
+                self.name_input.hint_text = "Your name"
+                self.name_input.background_color = (0, 0, 0, 0)  # Transparent
+            else:
+                self.name_label.text = "Educator Name:"
+                self.name_input.disabled = False
+                self.name_input.hint_text = "Educator name"
+                self.name_input.background_color = (0, 0, 0, 0)  # Transparent
+    
+    def verify_and_launch(self, instance):
+        name = self.name_input.text.strip()
+        code = self.code_input.text.strip()
+        
+        if not code:
+            self.show_popup("Error", "Please enter an access code")
+            return
+            
+        if self.role == "student" and not name:
+            self.show_popup("Error", "Please enter your name")
+            return
+        
+        # Verify code in a separate thread to avoid UI freezing
+        threading.Thread(target=self.verify_code_thread, args=(code, self.role, name)).start()
+    
+    def verify_code_thread(self, code, role, name):
+        success, user_type, username = self.verify_code(code, role, name)
+        
+        # Schedule UI updates on the main thread
+        if success:
+            Clock.schedule_once(lambda dt: self.show_popup("Success", f"Access granted for {user_type}!"))
+            Clock.schedule_once(lambda dt: self.launch_application(user_type, username), 1)
+        elif user_type == "register":
+            Clock.schedule_once(lambda dt: self.show_register_page(name, code))
+        else:
+            if role == "student":
+                Clock.schedule_once(lambda dt: self.show_popup("Error", "Invalid name or access code"))
+            else:
+                Clock.schedule_once(lambda dt: self.show_popup("Error", "Invalid access code"))
+    
     def verify_code(self, code, role, name):
         global db
         if db is None:
             db = get_db_connection()
             if db is None:
-                messagebox.showerror("Error", "Database connection not available")
                 return False, None, None
         
         try:
@@ -218,17 +332,14 @@ class Launcher:
             code_data = access_codes_collection.find_one({"code": code, "is_active": True})
             
             if not code_data:
-                messagebox.showerror("Error", "Invalid or inactive access code")
                 return False, None, None
             
             is_admin_code = code_data.get('is_admin_code', False)
             
             if role == "student" and is_admin_code:
-                messagebox.showerror("Error", "Students cannot use admin access codes")
                 return False, None, None
                 
             if role == "educator" and not is_admin_code:
-                messagebox.showerror("Error", "Educators must use admin access codes")
                 return False, None, None
                 
             if role == "student":
@@ -237,9 +348,8 @@ class Launcher:
                 if student_data:
                     return True, "student", name
                 else:
-                    if messagebox.showerror("student", "Student not found"):
-                        return False, "student", name
-                    return False, None, None
+                    # In Kivy, we'll handle the registration prompt differently
+                    return False, "register", name
                     
             elif role == "educator":
                 if code_data:
@@ -250,128 +360,142 @@ class Launcher:
                 return False, None, None
                 
         except Exception as e:
-            messagebox.showerror("Error", f"Verification failed: {str(e)}")
             return False, None, None
+    
+    def show_popup(self, title, message):
+        content = BoxLayout(orientation='vertical', padding=10, spacing=10)
+        content.add_widget(StyledLabel(text=message))
+        
+        btn = StyledButton(text='OK', size_hint_y=None, height=40)
+        popup = Popup(title=title, content=content, size_hint=(0.8, 0.4))
+        btn.bind(on_press=popup.dismiss)
+        content.add_widget(btn)
+        
+        popup.open()
+    
+    def show_register_page(self, name, code):
+        self.manager.get_screen('register').set_fields(name, code)
+        self.manager.current = 'register'
+    
+    def launch_application(self, user_type, username):
+        print(f"Launching application as {user_type}: {username}")
+        # Launch the VirtualPainter application
+        app = App.get_running_app()
+        app.user_type = user_type
+        app.username = username
+        app.start_virtual_painter()
+    
+    def force_close(self, instance):
+        App.get_running_app().stop()
+    
+    def on_size(self, *args):
+        self.rect.size = self.size
+        self.rect.pos = self.pos
 
-    def verify_and_launch(self):
-        role = self.role_var.get()
-        name = self.name_entry.get().strip()
-        code = self.code_entry.get().strip()
+class RegisterScreen(Screen):
+    def __init__(self, **kwargs):
+        super(RegisterScreen, self).__init__(**kwargs)
+        self.layout = FloatLayout()
         
-        if not code:
-            messagebox.showerror("Error", "Please enter an access code")
-            return
-            
-        if role == "student" and not name:
-            messagebox.showerror("Error", "Please enter your name")
-            return
+        with self.layout.canvas.before:
+            Color(0.219, 0.196, 0.196, 1)  # #383232
+            self.rect = Rectangle(size=Window.size, pos=self.layout.pos)
         
-        success, user_type, username = self.verify_code(code, role, name)
-        
-        if success:
-            messagebox.showinfo("Success", f"Access granted for {user_type}!")
-            self.launch_application(user_type, username)
-        elif user_type == "register":
-            self.show_register_page(name, code)
-        else:
-            if role == "student":
-                messagebox.showerror("Error", "Invalid name or access code")
-            else:
-                messagebox.showerror("Error", "Invalid access code")
-
-    def show_register_page(self, name="", code=""):
-        for widget in self.root.winfo_children():
-            widget.destroy()
-        
-        bg_color = "#383232"
-        canvas = tk.Canvas(self.root, width=1280, height=720, bg=bg_color)
-        canvas.pack()
-
-        center_x = 1280 // 2
-        logo_y = 100
-        title_y = 210
-        form_y = 290
-        
+        # Logo
         try:
-            logo_img = Image.open("icon/logo.png")
-            logo_img = logo_img.resize((150, 150))
-            self.logo_photo = ImageTk.PhotoImage(logo_img)
-            canvas.create_image(center_x, logo_y, image=self.logo_photo)
-        except FileNotFoundError:
-            canvas.create_text(center_x, logo_y, text="Beyond The Brush",
-                             font=self.title_font, fill="white")
-
-        canvas.create_text(center_x, title_y, text="Student Registration",
-                         font=("Arial", 36, "bold"), fill="white")
-
-        form_frame = tk.Frame(self.root, bg=bg_color)
-        form_frame.place(relx=0.5, y=form_y, anchor='center')
-
-        name_frame = tk.Frame(form_frame, bg=bg_color)
-        name_frame.pack(pady=10, fill='x')
+            self.logo = Image(source='icon/logo.png', size_hint=(None, None), size=(150, 150),
+                             pos_hint={'center_x': 0.5, 'center_y': 0.8})
+            self.layout.add_widget(self.logo)
+        except:
+            self.logo_label = StyledLabel(text="Beyond The Brush", font_size='36sp', bold=True,
+                                   pos_hint={'center_x': 0.5, 'center_y': 0.8})
+            self.layout.add_widget(self.logo_label)
         
-        name_label = tk.Label(name_frame, text="Full Name:", 
-                            font=self.small_font, bg=bg_color, fg="white")
-        name_label.pack(side='left', padx=10)
+        # Title
+        self.title_label = StyledLabel(text="Student Registration", font_size='36sp', bold=True,
+                                pos_hint={'center_x': 0.5, 'center_y': 0.65})
+        self.layout.add_widget(self.title_label)
         
-        self.reg_name_entry = tk.Entry(name_frame, font=self.small_font, width=25)
-        self.reg_name_entry.insert(0, name)
-        self.reg_name_entry.pack(side='left')
-
-        code_frame = tk.Frame(form_frame, bg=bg_color)
-        code_frame.pack(pady=10, fill='x')
+        # Form container
+        form_layout = BoxLayout(orientation='vertical', size_hint=(0.6, 0.3),
+                               pos_hint={'center_x': 0.5, 'center_y': 0.45}, spacing=10)
         
-        code_label = tk.Label(code_frame, text="Access Code:", 
-                            font=self.small_font, bg=bg_color, fg="white")
-        code_label.pack(side='left', padx=10)
+        # Name field
+        name_layout = BoxLayout(orientation='horizontal', size_hint_y=None, height=40)
+        name_label = StyledLabel(text="Full Name:", font_size='16sp', size_hint_x=0.4)
+        self.name_input = StyledTextInput(hint_text="Your full name", size_hint_x=0.6)
+        name_layout.add_widget(name_label)
+        name_layout.add_widget(self.name_input)
+        form_layout.add_widget(name_layout)
         
-        self.reg_code_entry = tk.Entry(code_frame, font=self.small_font, width=25, show="*")
-        self.reg_code_entry.insert(0, code)
-        self.reg_code_entry.pack(side='left')
-
-        button_frame = tk.Frame(form_frame, bg=bg_color)
-        button_frame.pack(pady=20)
-
-        register_btn = tk.Button(button_frame, text="REGISTER", font=self.normal_font,
-                               command=self.register_student, bg="#ff6600", fg="white",
-                               activebackground="#cc5200", activeforeground="white",
-                               width=15)
-        register_btn.pack(pady=5)
+        # Code field
+        code_layout = BoxLayout(orientation='horizontal', size_hint_y=None, height=40)
+        code_label = StyledLabel(text="Access Code:", font_size='16sp', size_hint_x=0.4)
+        self.code_input = StyledTextInput(hint_text="Access code", password=True, size_hint_x=0.6)
+        code_layout.add_widget(code_label)
+        code_layout.add_widget(self.code_input)
+        form_layout.add_widget(code_layout)
         
-        back_btn = tk.Button(button_frame, text="BACK", font=self.normal_font,
-                           command=self.show_entry_page, bg="#666666", fg="white",
-                           activebackground="#555555", activeforeground="white",
-                           width=15)
-        back_btn.pack(pady=5)
-
-    def register_student(self):
-        name = self.reg_name_entry.get().strip()
-        code = self.reg_code_entry.get().strip()
+        self.layout.add_widget(form_layout)
+        
+        # Buttons
+        button_layout = BoxLayout(orientation='vertical', size_hint=(0.6, 0.2),
+                                 pos_hint={'center_x': 0.5, 'center_y': 0.2}, spacing=10)
+        
+        self.register_btn = StyledButton(text="REGISTER", font_size='18sp')
+        with self.register_btn.canvas.before:
+            Color(1, 0.4, 0, 1)  # Orange color for register button
+            self.register_btn.rect = RoundedRectangle(size=self.register_btn.size, pos=self.register_btn.pos, radius=[10])
+        self.register_btn.bind(on_press=self.register_student)
+        button_layout.add_widget(self.register_btn)
+        
+        self.back_btn = StyledButton(text="BACK", font_size='18sp')
+        with self.back_btn.canvas.before:
+            Color(0.4, 0.4, 0.4, 1)  # Gray color for back button
+            self.back_btn.rect = RoundedRectangle(size=self.back_btn.size, pos=self.back_btn.pos, radius=[10])
+        self.back_btn.bind(on_press=self.go_back)
+        button_layout.add_widget(self.back_btn)
+        
+        self.layout.add_widget(button_layout)
+        
+        self.add_widget(self.layout)
+    
+    def set_fields(self, name, code):
+        self.name_input.text = name
+        self.code_input.text = code
+    
+    def register_student(self, instance):
+        name = self.name_input.text.strip()
+        code = self.code_input.text.strip()
         
         if not name or not code:
-            messagebox.showerror("Error", "Please fill in all fields")
+            self.show_popup("Error", "Please fill in all fields")
             return
         
         if len(name) < 3:
-            messagebox.showerror("Error", "Name must be at least 3 characters")
+            self.show_popup("Error", "Name must be at least 3 characters")
             return
         
+        # Register in a separate thread
+        threading.Thread(target=self.register_thread, args=(name, code)).start()
+    
+    def register_thread(self, name, code):
         try:
             access_codes_collection = db["access_codes"]
             students_collection = db["students"]
             
             code_data = access_codes_collection.find_one({"code": code, "is_active": True})
             if not code_data:
-                messagebox.showerror("Error", "Invalid access code")
+                Clock.schedule_once(lambda dt: self.show_popup("Error", "Invalid access code"))
                 return
                 
             if code_data.get('is_admin_code', False):
-                messagebox.showerror("Error", "Cannot register with admin code")
+                Clock.schedule_once(lambda dt: self.show_popup("Error", "Cannot register with admin code"))
                 return
                 
             existing_student = students_collection.find_one({"name": name})
             if existing_student:
-                messagebox.showerror("Error", "Student already exists")
+                Clock.schedule_once(lambda dt: self.show_popup("Error", "Student already exists"))
                 return
                 
             students_collection.insert_one({
@@ -380,50 +504,99 @@ class Launcher:
                 "registered_at": time.time()
             })
             
-            messagebox.showinfo("Success", "Registration successful!")
-            self.launch_application("student", name)
+            Clock.schedule_once(lambda dt: self.show_popup("Success", "Registration successful!"))
+            Clock.schedule_once(lambda dt: self.launch_application("student", name), 1)
             
         except Exception as e:
-            messagebox.showerror("Error", f"Registration failed: {str(e)}")
-
+            Clock.schedule_once(lambda dt: self.show_popup("Error", f"Registration failed: {str(e)}"))
+    
     def launch_application(self, user_type, username):
-        self.root.destroy()
-        self.launch_VirtualPainter_program(user_type, username)
+        print(f"Launching application as {user_type}: {username}")
+        # Launch the VirtualPainter application
+        app = App.get_running_app()
+        app.user_type = user_type
+        app.username = username
+        app.start_virtual_painter()
+    
+    def go_back(self, instance):
+        self.manager.current = 'entry'
+    
+    def show_popup(self, title, message):
+        content = BoxLayout(orientation='vertical', padding=10, spacing=10)
+        content.add_widget(StyledLabel(text=message))
+        
+        btn = StyledButton(text='OK', size_hint_y=None, height=40)
+        popup = Popup(title=title, content=content, size_hint=(0.8, 0.4))
+        btn.bind(on_press=popup.dismiss)
+        content.add_widget(btn)
+        
+        popup.open()
+    
+    def on_size(self, *args):
+        self.rect.size = self.size
+        self.rect.pos = self.pos
 
-    def launch_VirtualPainter_program(self, user_type, username):
+class BeyondTheBrushApp(App):
+    user_type = StringProperty('')
+    username = StringProperty('')
+    
+    def build(self):
+        # Set window size to 1024x600
+        Window.size = (1024, 600)
+        Window.minimum_width, Window.minimum_height = Window.size
+        
+        # Add window resize handler
+        Window.bind(on_resize=self.on_window_resize)
+        
+        # Create screen manager
+        sm = ScreenManager(transition=SlideTransition())
+        
+        # Add screens
+        sm.add_widget(LoadingScreen(name='loading'))
+        sm.add_widget(EntryScreen(name='entry'))
+        sm.add_widget(RegisterScreen(name='register'))
+        
+        return sm
+    
+    def on_window_resize(self, instance, width, height):
+        # Maintain minimum window size
+        if width < Window.minimum_width:
+            Window.size = (Window.minimum_width, height)
+        if height < Window.minimum_height:
+            Window.size = (width, Window.minimum_height)
+    
+    def start_virtual_painter(self):
+        # Import and run the VirtualPainter in a separate process
+        import subprocess
+        import sys
+        
+        # Pass user info as command line arguments
+        cmd = [sys.executable, "VirtualPainterMobile.py", self.user_type, self.username]
+        
+        # For compiled apps, we might need a different approach
+        if getattr(sys, 'frozen', False):
+            # Running as compiled executable
+            base_path = sys._MEIPASS
+            cmd = [os.path.join(base_path, "VirtualPainterMobile"), self.user_type, self.username]
+        
         try:
-            print(f"Launching VirtualPainter as {user_type}: {username}")
-            
-            try:
-                if self.root and self.root.winfo_exists():
-                    self.root.destroy()
-            except Exception as e:
-                print(f"Warning: Could not destroy root window: {e}")
-            
-            try:
-                import VirtualPainter
-                VirtualPainter.run_application(user_type, username)
-            except ImportError as ie:
-                print(f"Failed to import VirtualPainter: {ie}")
-                raise
-            except Exception as e:
-                print(f"Error in VirtualPainter: {e}")
-                raise
-            
+            subprocess.Popen(cmd)
+            self.stop()  # Close the Kivy launcher
         except Exception as e:
-            print(f"Error launching VirtualPainter: {e}")
-            import traceback
-            traceback.print_exc()
-            input("Press Enter to exit...")
-            sys.exit(1)
+            print(f"Failed to start VirtualPainterMobile: {e}")
+            # Fallback: show a message
+            self.show_error_popup("Failed to start painting application")
 
-    def force_close(self):
-        self.root.destroy()
-        sys.exit(0)
+    def show_error_popup(self, message):
+        content = BoxLayout(orientation='vertical', padding=10, spacing=10)
+        content.add_widget(StyledLabel(text=message))
+        
+        btn = StyledButton(text='OK', size_hint_y=None, height=40)
+        popup = Popup(title='Error', content=content, size_hint=(0.8, 0.4))
+        btn.bind(on_press=popup.dismiss)
+        content.add_widget(btn)
+        
+        popup.open()
 
-if __name__ == "__main__":
-    try:
-        launcher = Launcher()
-    except KeyboardInterrupt:
-        print("Application terminated by user")
-        sys.exit(0)
+if __name__ == '__main__':
+    BeyondTheBrushApp().run()
