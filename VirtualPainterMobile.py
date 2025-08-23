@@ -55,7 +55,7 @@ class KeyboardInput:
         self.smooth_text = []  # Buffer for smooth text rendering
         self.text_fade_in = 1.0  # Text fade-in animation
 
-        # Add touch-related properties
+        # Add touch-related propertiesv
         self.touch_point = None
         self.is_touching = False
         self.touch_start_time = 0

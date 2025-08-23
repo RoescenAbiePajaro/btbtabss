@@ -5,6 +5,7 @@ import time
 
 class KeyboardInput:
     def __init__(self):
+        
         self.text = ""
         self.active = False
         self.cursor_visible = True
