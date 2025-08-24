@@ -1,3 +1,4 @@
 .env
 myenv/Lib/site-packages
 myenv/
+venv
